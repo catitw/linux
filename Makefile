@@ -110,8 +110,10 @@ endif
 # NOTE-XY:
 # - the echo mechanism implementaion:
 #   1. see related `kecho` function implement in file `scripts/Kbuild.include`
+	   > [`kecho` implement](https://github.com/catitw/linux/blob/81877803bf3bd70e6c2788f79d2138b11d5abac6/scripts/Kbuild.include#L79-L82)
 #      > [`$(kecho)` usage](https://docs.kernel.org/kbuild/makefiles.html#:~:text=%E6%97%B6%E5%88%99%E4%B8%8D%E5%90%8C%E3%80%82-,%24(kecho),-echoing%20information%20to)
 #   2. see related `cmd` function implement in file `scripts/Kbuild.include`
+#      > [`cmd` implement](https://github.com/catitw/linux/blob/81877803bf3bd70e6c2788f79d2138b11d5abac6/scripts/Kbuild.include#L159)
 #
 # - Normally make prints each line of the recipe before it is executed.
 #   However, when a line starts with ‘@’, the echoing of that line is suppressed.
