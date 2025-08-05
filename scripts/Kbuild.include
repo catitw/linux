@@ -144,12 +144,18 @@ silent_log_print = exec >/dev/null;
 # So, we cover them, and also SIGPIPE just in case.
 #
 # Of course, this is unneeded for phony targets.
+# NOTE-XY: how it works:
+# 1. remote the $@ file first.
+# 2. reset the signal trap (`trap - $(sig)`)
+# 3. resend the signal
 delete-on-interrupt = \
 	$(if $(filter-out $(PHONY), $@), \
 		$(foreach sig, HUP INT QUIT TERM PIPE, \
 			trap 'rm -f $@; trap - $(sig); kill -s $(sig) $$$$' $(sig);))
 
 # print and execute commands
+# NOTE-XY: how it works:
+# - `;` separated commands in bash will be executed one by one in same shell process.
 cmd = @$(if $(cmd_$(1)),set -e; $($(quiet)log_print) $(delete-on-interrupt) $(cmd_$(1)),:)
 
 ###

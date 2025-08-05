@@ -38,14 +38,23 @@ __all:
 # descending is started. They are now explicitly listed as the
 # prepare rule.
 
+# NOTE-XY: https://www.gnu.org/software/make/manual/make.html#:~:text=%E5%B1%9E%E6%80%A7%E7%9A%84%E5%8F%98%E9%87%8F%E3%80%82-,MAKEFILE_LIST,-Contains%20the%20name
 this-makefile := $(lastword $(MAKEFILE_LIST))
 abs_srctree := $(realpath $(dir $(this-makefile)))
+# NOTE-XY: https://www.gnu.org/software/make/manual/make.html#:~:text=%E7%9B%AE%E6%A0%87%E7%9A%84%E5%8F%82%E6%95%B0%E2%80%9D%E3%80%82-,CURDIR,-Set%20to%20the
 abs_output := $(CURDIR)
 
+# NOTE-XY: `sub_make_done` is used to avoid re-entering the same Makefile.
+# if `sub_make_done` is not set, we are in the top-level Makefile, and will be export to 1 and then re-enter this Makefile later.
 ifneq ($(sub_make_done),1)
 
 # Do not use make's built-in rules and variables
 # (this increases performance and avoids hard-to-debug behaviour)
+# NOTE-XY:
+# - `-r`: https://www.gnu.org/software/make/manual/make.html#index-_002d_002dno_002dbuiltin_002drules
+# - `-R`: https://www.gnu.org/software/make/manual/make.html#index-_002d_002dno_002dbuiltin_002dvariables
+#
+# > check the diff between command `make -p` and `MAKEFLAGS=-rR make -p`.
 MAKEFLAGS += -rR
 
 # Avoid funny character set dependencies
@@ -98,6 +107,15 @@ quiet=silent_
 override KBUILD_VERBOSE :=
 endif
 
+# NOTE-XY:
+# - the echo mechanism implementaion:
+#   1. see related `kecho` function implement in file `scripts/Kbuild.include`
+#      > [`$(kecho)` usage](https://docs.kernel.org/kbuild/makefiles.html#:~:text=%E6%97%B6%E5%88%99%E4%B8%8D%E5%90%8C%E3%80%82-,%24(kecho),-echoing%20information%20to)
+#   2. see related `cmd` function implement in file `scripts/Kbuild.include`
+#
+# - Normally make prints each line of the recipe before it is executed.
+#   However, when a line starts with ‘@’, the echoing of that line is suppressed.
+#   > [Recipe Echoing](https://www.gnu.org/software/make/manual/make.html#Echoing)
 export quiet Q KBUILD_VERBOSE
 
 # Call a source code checker (by default, "sparse") as part of the
