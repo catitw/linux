@@ -158,9 +158,13 @@ ifeq ("$(origin MO)", "command line")
   KBUILD_EXTMOD_OUTPUT := $(MO)
 endif
 
+# NOTE-XY: only support build single external module at a time.
 $(if $(word 2, $(KBUILD_EXTMOD)), \
 	$(error building multiple external modules is not supported))
 
+# NOTE-XY: module directory path can NOT contains `%` or `:`
+# `%` is used in makefile for pattern matching.
+# `:` is used in makefile for defining recipes.
 $(foreach x, % :, $(if $(findstring $x, $(KBUILD_EXTMOD)), \
 	$(error module directory path cannot contain '$x')))
 
@@ -222,6 +226,13 @@ else
     output := $(KBUILD_OUTPUT)
 endif
 
+# NOTE-XY:
+# - objtree: refers to the root of the kernel object tree. It is . when building the kernel, but it is different when building external modules.
+#   > see [`$(objtree)`](https://docs.kernel.org/kbuild/makefiles.html#:~:text=same%20as%20%24(srcroot).-,%24(objtree),-%24(objtree)%20refers%20to)
+#
+# - srcroot: refers to the root of the source you are building, which can be either the kernel source or the external modules source.
+#   > see [`$(srcroot)`](https://docs.kernel.org/kbuild/makefiles.html#:~:text=not%20generated%20files).-,%24(srcroot),-%24(srcroot)%20refers%20to)
+
 export objtree srcroot
 
 # Do we want to change the working directory?
@@ -239,6 +250,10 @@ endif
 
 export sub_make_done := 1
 
+# NOTE-XY: what does the branch `sub_make_done` do:
+# - clear built-in rules and variables.
+# - export env vars for verbose setting.
+# - export env vars for path of source directory and object directory.
 endif # sub_make_done
 
 ifeq ($(abs_output),$(CURDIR))
