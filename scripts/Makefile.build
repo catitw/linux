@@ -3,6 +3,8 @@
 # Building
 # ==========================================================================
 
+# NOTE-XY: the `obj` is passed by command line, for example: `$(Q)$(MAKE) -f scripts/Makefile.build obj=dir`.
+# see `build` variable defined in `scripts/Kbuild.include`.
 src := $(srcroot)/$(obj)
 
 PHONY := $(obj)/
@@ -17,6 +19,7 @@ lib-y :=
 lib-m :=
 always-y :=
 always-m :=
+# NOTE-XY: here we define the `targets` variable.
 targets :=
 subdir-y :=
 subdir-m :=
@@ -30,10 +33,15 @@ subdir-asflags-y :=
 subdir-ccflags-y :=
 
 # Read auto.conf if it exists, otherwise ignore
+# NOTE-XY: here `-include` means if the file exists, include it, otherwise ignore.
+# see more about [makefile include](https://www.gnu.org/software/make/manual/make.html#Include).
 -include $(objtree)/include/config/auto.conf
 
+# NOTE-XY: here we include the `Kbuild.include` file again, even though it is already included by the main makefile.
+# so that the variable(e.g. `targets`) defined previous could be used in the `Kbuild.include` file.
 include $(srctree)/scripts/Kbuild.include
 include $(srctree)/scripts/Makefile.compiler
+# NOTE-XY: the variable `kbuild-file` is defined in `scripts/Kbuild.include`.
 include $(kbuild-file)
 include $(srctree)/scripts/Makefile.lib
 
@@ -575,6 +583,8 @@ targets := $(filter-out $(PHONY), $(targets))
 
 existing-targets := $(wildcard $(sort $(targets)))
 
+# NOTE-XY: here we read back the `savedcmd_$@` variable that stored in the `$(dot-target).cmd` file.
+# > see `cmd_and_savecmd` defined in file `Kbuild.include` for more details.
 -include $(foreach f,$(existing-targets),$(dir $(f)).$(notdir $(f)).cmd)
 
 # Create directories for object files if they do not exist

@@ -50,6 +50,8 @@ basetarget = $(basename $(notdir $@))
 
 ###
 # real prerequisites without phony targets
+# NOTE-XY: current file is included by other Makefiles, and the variable `PHONY` is defined in other Makefiles.
+# > for example: [include this file by main Makefile](https://github.com/catitw/linux/blob/388ea649191806fca42fb2deaa7c91349175335f/Makefile#L425-)
 real-prereqs = $(filter-out $(PHONY), $^)
 
 ###
@@ -79,6 +81,9 @@ endif
        kecho := :
  quiet_kecho := echo
 silent_kecho := :
+# NOTE-XY: see [quiet variable setting](https://github.com/catitw/linux/blob/388ea649191806fca42fb2deaa7c91349175335f/Makefile#L110-L121)
+# NOTE-XY: the `:` is no-op command in shell. see `$(kecho)` usage in following `filechk` define.
+# > see [noop in bash](https://stackoverflow.com/questions/12404661/what-is-the-use-case-of-noop-in-bash)
 kecho := $($(quiet)kecho)
 
 ###
@@ -94,6 +99,10 @@ kecho := $($(quiet)kecho)
 # - If no file exist it is created
 # - If the content differ the new file is used
 # - If they are equal no change, and no timestamp update
+#
+# NOTE-XY: 
+# 1. generate the new temp file with the pre-defined filechk_$(1) rule.
+# 2. overwrite the existing file with the new temp file if they are different.
 define filechk
 	$(check-FORCE)
 	$(Q)set -e;						\
@@ -110,12 +119,14 @@ endef
 # Shorthand for $(Q)$(MAKE) -f scripts/Makefile.build obj=
 # Usage:
 # $(Q)$(MAKE) $(build)=dir
+# NOTE-XY: TODO: explore the file `Makefile.kbuild`.
 build := -f $(srctree)/scripts/Makefile.build obj
 
 ###
 # Shorthand for $(Q)$(MAKE) -f scripts/Makefile.clean obj=
 # Usage:
 # $(Q)$(MAKE) $(clean)=dir
+# NOTE-XY: TODO: explore the file `Makefile.clean`.
 clean := -f $(srctree)/scripts/Makefile.clean obj
 
 # pring log
@@ -172,6 +183,11 @@ ifneq ($(KBUILD_NOCMDDEP),1)
 # If the target does not exist, the *.cmd file should not be included so
 # $(savedcmd_$@) gets empty. Then, target will be built even if $(newer-prereqs)
 # happens to become empty.
+# NOTE-XY: we read back the variable `savedcmd_$@` stored in the `$(dot-target).cmd` file in `Makefile.build` file.
+# the flow is:
+# 1. we called the `build` variable defined previous, and it will lead us to sub-make the `Makefile.build` file.
+# 2. in the `Makefile.build` file, we called `-include` to try to include the `$(dot-target).cmd` file if it exists，
+#    and we read back the variable `savedcmd_$@`.
 cmd-check = $(filter-out $(subst $(space),$(space_escape),$(strip $(savedcmd_$@))), \
                          $(subst $(space),$(space_escape),$(strip $(cmd_$1))))
 else
@@ -191,17 +207,42 @@ make-cmd = $(call escsq,$(subst $(pound),$$(pound),$(subst $$,$$$$,$(cmd_$(1))))
 # PHONY targets skipped in both cases.
 # If there is no prerequisite other than phony targets, $(newer-prereqs) becomes
 # empty even if the target does not exist. cmd-check saves this corner case.
+# NOTE-XY:
+# - `$?`: The names of all the prerequisites that are newer than the target,
+#   or that do not exist.
+# see [$?](https://www.gnu.org/software/make/manual/make.html#Include:~:text=%E9%9A%90%E5%BC%8F%E8%A7%84%E5%88%99%EF%BC%89%E3%80%82-,%24%3F,-The%20names%20of)
 newer-prereqs = $(filter-out $(PHONY),$?)
 
 # It is a typical mistake to forget the FORCE prerequisite. Check it here so
 # no more breakage will slip in.
+# NOTE-XY:
+# `$(warning ...)` will be evaluated by makefile, and expression return empty string finally.
 check-FORCE = $(if $(filter FORCE, $^),,$(warning FORCE prerequisite is missing))
 
+# NOTE-XY: 
+# - `$(newer-prereqs)`: check if any prerequisite is newer than target.
+# - `$(cmd-check)`: check if command has changed.
+# - `$(check-FORCE)`: check if `FORCE` is in prerequisites.
+# the makefile expression `$(if-changed-cond)` will evaluate all `$(xxx)` it includes and return a string finally.
 if-changed-cond = $(newer-prereqs)$(cmd-check)$(check-FORCE)
 
 # Execute command if command has changed or prerequisite(s) are updated.
+#
+# NOTE-XY: `$(if-changed-cond)` will be evaluated to a string by makefile, and if the string is not empty,
+# the `$(cmd_and_savecmd)` will be executed.
+# > see [command-change-detection](https://docs.kernel.org/kbuild/makefiles.html#command-change-detection)
+# 
+# - Usage:
+#   ```makefile
+#   quiet_cmd_<command> = ...
+#         cmd_<command> = ...
+#
+#   <target>: <source(s)> FORCE
+#       $(call if_changed,<command>)
+#   ```
 if_changed = $(if $(if-changed-cond),$(cmd_and_savecmd),@:)
 
+# NOTE-XY: we read back the variable `savedcmd_$@` stored in the `$(dot-target).cmd` file in `Makefile.build` file.
 cmd_and_savecmd =                                                            \
 	$(cmd);                                                              \
 	printf '%s\n' 'savedcmd_$@ := $(make-cmd)' > $(dot-target).cmd
@@ -209,6 +250,11 @@ cmd_and_savecmd =                                                            \
 # Execute the command and also postprocess generated .d dependencies file.
 if_changed_dep = $(if $(if-changed-cond),$(cmd_and_fixdep),@:)
 
+# NOTE-XY:
+# - `fixdep` script: 
+#   - usage `fixdep <depfile> <target> '<command>'`.
+#   - it will read the dependency file `<depfile>`, and write transformed dependency snipped to stdout.
+#   > see more in `fixdep.c` comments.
 cmd_and_fixdep =                                                             \
 	$(cmd);                                                              \
 	$(objtree)/scripts/basic/fixdep $(depfile) $@ '$(make-cmd)' > $(dot-target).cmd;\
@@ -217,6 +263,16 @@ cmd_and_fixdep =                                                             \
 # Usage: $(call if_changed_rule,foo)
 # Will check if $(cmd_foo) or any of the prerequisites changed,
 # and if so will execute $(rule_foo).
+#
+# NOTE-XY:
+# rules are mainly defined in file `Makefile.build`. use cmd `rg --glob-case-insensitive -g '*makefile*' '\brule_\w+'` to found them.
+# exmaple:
+# ```makefile
+#  define rule_rustc_o_rs
+#  	$(call cmd_and_fixdep,rustc_o_rs)
+#  	$(call cmd,gen_objtooldep)
+#  endef
+# ```
 if_changed_rule = $(if $(if-changed-cond),$(rule_$(1)),@:)
 
 ###
