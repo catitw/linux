@@ -110,7 +110,7 @@ endif
 # NOTE-XY:
 # - the echo mechanism implementaion:
 #   1. see related `kecho` function implement in file `scripts/Kbuild.include`
-	   > [`kecho` implement](https://github.com/catitw/linux/blob/81877803bf3bd70e6c2788f79d2138b11d5abac6/scripts/Kbuild.include#L79-L82)
+#	   > [`kecho` implement](https://github.com/catitw/linux/blob/81877803bf3bd70e6c2788f79d2138b11d5abac6/scripts/Kbuild.include#L79-L82)
 #      > [`$(kecho)` usage](https://docs.kernel.org/kbuild/makefiles.html#:~:text=%E6%97%B6%E5%88%99%E4%B8%8D%E5%90%8C%E3%80%82-,%24(kecho),-echoing%20information%20to)
 #   2. see related `cmd` function implement in file `scripts/Kbuild.include`
 #      > [`cmd` implement](https://github.com/catitw/linux/blob/81877803bf3bd70e6c2788f79d2138b11d5abac6/scripts/Kbuild.include#L159)
@@ -271,6 +271,7 @@ ifeq ($(filter --no-print-directory, $(MAKEFLAGS)),)
 need-sub-make := 1
 endif
 
+# NOTE-XY: if `$(CURDIR)` is not the final `$(abs_output)`, invoke a second make.
 ifeq ($(need-sub-make),1)
 
 PHONY += $(MAKECMDGOALS) __sub-make
@@ -284,6 +285,7 @@ __sub-make:
 	-f $(abs_srctree)/Makefile $(MAKECMDGOALS)
 
 else # need-sub-make
+# NOTE-XY: now the `$(CURDIR)` is the final `$(abs_output)`.
 
 # We process the rest of the Makefile if this is the final invocation of make
 
@@ -309,6 +311,8 @@ endif
 
 export srctree := $(if $(KBUILD_EXTMOD),$(abs_srctree),$(srcroot))
 
+# NOTE-XY:
+# see [Makefile VPATH](https://www.gnu.org/software/make/manual/make.html#Directory-Search)
 ifdef building_out_of_srctree
 export VPATH := $(srcroot)
 else
@@ -326,6 +330,7 @@ endif
 version_h := include/generated/uapi/linux/version.h
 
 clean-targets := %clean mrproper cleandocs
+# NOTE-XY: targets that do not need `.config` file.
 no-dot-config-targets := $(clean-targets) \
 			 cscope gtags TAGS tags help% %docs check% coccicheck \
 			 $(version_h) headers headers_% archheaders archscripts \
@@ -341,12 +346,17 @@ need-config	:= 1
 may-sync-config	:= 1
 single-build	:=
 
+# NOTE-XY: if `$(MAKECMDGOALS)` contains any target in `$(no-dot-config-targets)`, then ...
 ifneq ($(filter $(no-dot-config-targets), $(MAKECMDGOALS)),)
+	# NOTE-XY: if `$(MAKECMDGOALS)` do not contain target that out of `$(no-dot-config-targets)`, then ...
     ifeq ($(filter-out $(no-dot-config-targets), $(MAKECMDGOALS)),)
+		# NOTE-XY: all targets are no-dot-config targets, so unset `need-config`
         need-config :=
     endif
 endif
 
+# same as `no-dot-config-targets`. unset the `may-sync-config` if `$(MAKECMDGOALS)` 
+# all targets are `$(no-sync-config-targets)`.
 ifneq ($(filter $(no-sync-config-targets), $(MAKECMDGOALS)),)
     ifeq ($(filter-out $(no-sync-config-targets), $(MAKECMDGOALS)),)
         may-sync-config :=
@@ -370,8 +380,10 @@ endif
 
 # We cannot build single targets and the others at the same time
 ifneq ($(filter $(single-targets), $(MAKECMDGOALS)),)
+	# NOTE-XY: set `single-build` if `$(MAKECMDGOALS)` contains any single target.
     single-build := 1
     ifneq ($(filter-out $(single-targets), $(MAKECMDGOALS)),)
+		# NOTE-XY: targets has both single target and other targets, so set `mixed-build`.
         mixed-build := 1
     endif
 endif
@@ -379,6 +391,7 @@ endif
 # For "make -j clean all", "make -j mrproper defconfig all", etc.
 ifneq ($(filter $(clean-targets),$(MAKECMDGOALS)),)
     ifneq ($(filter-out $(clean-targets),$(MAKECMDGOALS)),)
+		# NOTE-XY: targets has both clean target and other targets, so set `mixed-build`.
         mixed-build := 1
     endif
 endif
@@ -400,6 +413,7 @@ PHONY += $(MAKECMDGOALS) __build_one_by_one
 $(MAKECMDGOALS): __build_one_by_one
 	@:
 
+# NOTE-XY: if `mixed-build` is set, then build them one by one.
 __build_one_by_one:
 	$(Q)set -e; \
 	for i in $(MAKECMDGOALS); do \
