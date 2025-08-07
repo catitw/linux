@@ -89,6 +89,16 @@ PHONY += savedefconfig defconfig
 savedefconfig: $(obj)/conf
 	$(Q)$< $(silent) --$@=defconfig $(Kconfig)
 
+# NOTE-XY: here we define the target `defconfig`, and it requires the target `$(obj)/conf`.
+#
+# where is the recipe to build `$(obj)/conf`?
+# 0. current makefile is include in `Makefile.build` first. todo: link
+# 1. current makefile add executable `conf` to variable `hostprogs`.
+# 2. in file `Makefile.build`, it sort variable `hostprogs`. todo: link
+# 3. in file `Makefile.build`, it include the `Makefile.host` file. todo: link
+# 4. in file `Makefile.host`, variable `host-cmulti` evaluates to `conf`.
+# 5. in file `Makefile.host`, `$(call multi_depend, $(host-cmulti), , -objs)` generate the
+#    recipe rule to build the target `$(obj)/conf`, it depends on the target `$(obj)/$(conf-objs)`.
 defconfig: $(obj)/conf
 ifneq ($(wildcard $(srctree)/arch/$(SRCARCH)/configs/$(KBUILD_DEFCONFIG)),)
 	@$(kecho) "*** Default configuration is based on '$(KBUILD_DEFCONFIG)'"
@@ -171,6 +181,7 @@ HOSTCFLAGS_lexer.lex.o	:= -I $(src)
 HOSTCFLAGS_parser.tab.o	:= -I $(src)
 
 # conf: Used for defconfig, oldconfig and related targets
+# NOTE-XY: variables for building executable `conf`
 hostprogs	+= conf
 conf-objs	:= conf.o $(common-objs)
 
