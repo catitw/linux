@@ -513,8 +513,9 @@ HOSTPKG_CONFIG	= pkg-config
 KERNELDOC       = $(srctree)/scripts/kernel-doc.py
 export KERNELDOC
 
+# NOTE-XY: update this to debugging hostprogs. e.g: "-O0 -g3"
 KBUILD_USERHOSTCFLAGS := -Wall -Wmissing-prototypes -Wstrict-prototypes \
-			 -O2 -fomit-frame-pointer -std=gnu11
+			 -O0 -g3 -fomit-frame-pointer -std=gnu11
 KBUILD_USERCFLAGS  := $(KBUILD_USERHOSTCFLAGS) $(USERCFLAGS)
 KBUILD_USERLDFLAGS := $(USERLDFLAGS)
 
