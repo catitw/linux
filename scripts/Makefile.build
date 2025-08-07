@@ -41,7 +41,22 @@ subdir-ccflags-y :=
 # so that the variable(e.g. `targets`) defined previous could be used in the `Kbuild.include` file.
 include $(srctree)/scripts/Kbuild.include
 include $(srctree)/scripts/Makefile.compiler
-# NOTE-XY: the variable `kbuild-file` is defined in `scripts/Kbuild.include`.
+# NOTE-XY: 
+# - the variable `kbuild-file` is defined in file `scripts/Kbuild.include`.
+#   ```makefile
+#   kbuild-file = $(or $(wildcard $(src)/Kbuild),$(src)/Makefile)
+#   ```
+# 
+# - for example cmdline `make defconfig`:
+#   0. match the recipe `%config` defined in the main makefile.
+#   1. execute the `$(Q)$(MAKE) $(build)=scripts/kconfig $@`, which is expanded as:
+#      ```makefile
+#      make -f $(srctree)/scripts/Makefile.build obj=scripts/kconfig defconfig
+#      ```
+#   2. the variable `obj` will be `scripts/kconfig`, and the variable `src` will be `$(srcroot)/scripts/kconfig`.
+#      > see the variable `src` defination in the beginning of current file.
+#   3. then the variable `kbuild-file` will be `$(srcroot)/scripts/kconfig/Makefile`. (cause no Kbuild file under that dir)
+#   4. finally, the makefile `$(srcroot)/scripts/kconfig/Makefile` will be included, and we get recipe that defines `defconfig`.
 include $(kbuild-file)
 include $(srctree)/scripts/Makefile.lib
 
@@ -86,6 +101,11 @@ obj-y		:= $(filter-out %/, $(obj-y))
 endif
 
 # Expand $(foo-objs) $(foo-y) etc. by replacing their individuals
+# NOTE-XY:
+# - explain:
+#   - makefile `$(variable:pattern=replacement)`
+#   - $($(...)): here we expand the replaced variable.
+# - classic usage: see `multi_depend` defined in file `Makefile.lib`.
 suffix-search = $(strip $(foreach s, $3, $($(1:%$(strip $2)=%$s))))
 # List composite targets that are constructed by combining other targets
 multi-search = $(sort $(foreach m, $1, $(if $(call suffix-search, $m, $2, $3 -), $m)))
@@ -524,6 +544,8 @@ targets += $(call intermediate_targets, .asn1.o, .asn1.c .asn1.h)
 # ---------------------------------------------------------------------------
 
 # $(sort ...) is used here to remove duplicated words and excessive spaces.
+# NOTE-XY: for exmaple `make defconfig`, the variable `hostprogs` will include `conf`.
+# search `hostprogs	+= conf` in file `scripts/kconfig/Makefile`.
 hostprogs := $(sort $(hostprogs))
 ifneq ($(hostprogs),)
 include $(srctree)/scripts/Makefile.host

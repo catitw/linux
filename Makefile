@@ -429,6 +429,7 @@ KERNELRELEASE = $(call read-file, $(objtree)/include/config/kernel.release)
 KERNELVERSION = $(VERSION)$(if $(PATCHLEVEL),.$(PATCHLEVEL)$(if $(SUBLEVEL),.$(SUBLEVEL)))$(EXTRAVERSION)
 export VERSION PATCHLEVEL SUBLEVEL KERNELRELEASE KERNELVERSION
 
+# NOTE-XY: include this file for just getting variable `SUBARCH`.
 include $(srctree)/scripts/subarch.include
 
 # Cross compiling and selecting different set of gcc/bin-utils
@@ -786,6 +787,11 @@ export KBUILD_DEFCONFIG KBUILD_KCONFIG CC_VERSION_TEXT RUSTC_VERSION_TEXT
 config: outputmakefile scripts_basic FORCE
 	$(Q)$(MAKE) $(build)=scripts/kconfig $@
 
+# NOTE-XY: here we define the `%config` target. the command for example `make defconfig` will call this target.
+# variable `build` is defined in the file `Kbuild.include`, the expanded command equals to:
+# ```bash
+# make -f $(srctree)/scripts/Makefile.build obj=scripts/kconfig defconfig
+# ```
 %config: outputmakefile scripts_basic FORCE
 	$(Q)$(MAKE) $(build)=scripts/kconfig $@
 
