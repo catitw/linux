@@ -288,6 +288,7 @@ archprepare: $(cpufeaturemasks.hdr)
 # Kernel objects
 
 core-y  += arch/x86/boot/startup/
+# NOTE-XY: here we append the `arch/x86/lib/` to the `libs-y`
 libs-y  += arch/x86/lib/
 
 # drivers-y are linked after core-y

@@ -805,6 +805,7 @@ else #!config-build
 # but instead __all depend on modules
 PHONY += all
 ifeq ($(KBUILD_EXTMOD),)
+# NOTE-XY: for commandline "build -jN", we will enter this if branch
 __all: all
 else
 __all: modules
@@ -852,6 +853,7 @@ endif # KBUILD_EXTMOD
 # command line.
 # This allow a user to issue only 'make' to build a kernel including modules
 # Defaults to vmlinux, but the arch makefile usually adds further targets
+# NOTE-XY: here target `all` requires target `vmlinux`
 all: vmlinux
 
 CFLAGS_GCOV	:= -fprofile-arcs -ftest-coverage
@@ -1252,6 +1254,14 @@ export ARCH_LIB		:= $(filter %/, $(libs-y))
 export ARCH_DRIVERS	:= $(drivers-y) $(drivers-m)
 # Externally visible symbols (used by link-vmlinux.sh)
 
+# NOTE-XY:
+# - `libs-y` contains:
+#   - `lib/` always, 			see current file definitaion.
+#   - `arch/x86/lib/` for x86,	see `arch/x86/Makefile`.
+#
+# - exmaple: if `libs-y` is `lib/ arch/x86/lib/`, then `KBUILD_VMLINUX_OBJS` will be:
+#   `built-in.a lib/lib.a arch/x86/lib/lib.a`
+#   > TOOD: how do we build such `lib.a`?
 KBUILD_VMLINUX_OBJS := built-in.a $(patsubst %/, %/lib.a, $(filter %/, $(libs-y)))
 KBUILD_VMLINUX_LIBS := $(filter-out %/, $(libs-y))
 
@@ -1272,13 +1282,17 @@ quiet_cmd_ar_vmlinux.a = AR      $@
 	$(AR) mPiT $$($(AR) t $@ | sed -n 1p) $@ $$($(AR) t $@ | grep -F -f $(srctree)/scripts/head-object-list.txt)
 
 targets += vmlinux.a
+# NOTE-XY: here target `vmlinux.a` requires target `built-in.a`.
+# > and `$(KBUILD_VMLINUX_OBJS)` requires target `.`.
 vmlinux.a: $(KBUILD_VMLINUX_OBJS) scripts/head-object-list.txt FORCE
 	$(call if_changed,ar_vmlinux.a)
 
 PHONY += vmlinux_o
+# NOTE-XY: here target `vmlinux_o` requires target `vmlinux.a`
 vmlinux_o: vmlinux.a $(KBUILD_VMLINUX_LIBS)
 	$(Q)$(MAKE) -f $(srctree)/scripts/Makefile.vmlinux_o
 
+# NOTE-XY: here target `vmlinux.o` requires target `vmlinux_o`
 vmlinux.o modules.builtin.modinfo modules.builtin: vmlinux_o
 	@:
 
@@ -1295,11 +1309,14 @@ PHONY += vmlinux
 #  vmlinux: private export LDFLAGS_vmlinux := $(LDFLAGS_vmlinux)
 vmlinux: private _LDFLAGS_vmlinux := $(LDFLAGS_vmlinux)
 vmlinux: export LDFLAGS_vmlinux = $(_LDFLAGS_vmlinux)
+# NOTE-XY: here target `vmlinux` requires target `vmlinux.o`
 vmlinux: vmlinux.o $(KBUILD_LDS) modpost
 	$(Q)$(MAKE) -f $(srctree)/scripts/Makefile.vmlinux
 
 # The actual objects are generated when descending,
 # make sure no implicit rule kicks in
+# NOTE-XY: here target `$(KBUILD_VMLINUX_OBJS)` require target `.`
+# > and `$(build-dir)` requires target `prepare`.
 $(sort $(KBUILD_LDS) $(KBUILD_VMLINUX_OBJS) $(KBUILD_VMLINUX_LIBS)): . ;
 
 ifeq ($(origin KERNELRELEASE),file)
@@ -1332,11 +1349,18 @@ archprepare: outputmakefile archheaders archscripts scripts include/config/kerne
 	include/generated/compile.h include/generated/autoconf.h \
 	include/generated/rustc_cfg remove-stale-files
 
+# NOTE-XY: here target `prepare0` requires target `archprepare`
 prepare0: archprepare
 	$(Q)$(MAKE) $(build)=scripts/mod
+	@# NOTE-XY: here we called the `$(build)=.`, cause dir `$(srcroot)/.` has file `Kbuild`,
+	@# we will include that file, and build the recipe `prepare` defined in 
+	@# that `Kbuild` file(not the same name recipe in current file).
+	@# > why we will include it? 
+	@# > ans: see line `include $(kbuild-file)` in the file `scripts/Makefile.build`.
 	$(Q)$(MAKE) $(build)=. prepare
 
 # All the preparing..
+# NOTE-XY: here target `prepare` requires target `prepare0`
 prepare: prepare0
 ifdef CONFIG_RUST
 	+$(Q)$(CONFIG_SHELL) $(srctree)/scripts/rust_is_available.sh
@@ -1925,6 +1949,7 @@ filechk_kernel.release = echo $(KERNELRELEASE)
 KBUILD_BUILTIN :=
 KBUILD_MODULES := y
 
+# NOTE-XY: here we define the `build-dir` to be `.`
 build-dir := .
 
 clean-dirs := .
@@ -2062,7 +2087,13 @@ prepare: outputmakefile
 # make menuconfig etc.
 # Error messages still appears in the original language
 PHONY += $(build-dir)
+# NOTE-XY: here target `$(build-dir)` which evalutes to `.` requires target `prepare`
 $(build-dir): prepare
+	@# NOTE-XY: the key key key process to build target `vmlinux`.
+	@# it will expanded to: 
+	@# `make -f ./scripts/Makefile.build obj=. need-builtin=1 need-modorder=1`
+	@#
+	@# > here we not specify the target, so the first target `$(obj)/` will be built.
 	$(Q)$(MAKE) $(build)=$@ need-builtin=1 need-modorder=1 $(single-goals)
 
 clean-dirs := $(addprefix _clean_, $(clean-dirs))

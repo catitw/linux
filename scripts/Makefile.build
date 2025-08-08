@@ -7,6 +7,11 @@
 # see `build` variable defined in `scripts/Kbuild.include`.
 src := $(srcroot)/$(obj)
 
+# NOTE-XY: here we defined the `$(obj)/` target.
+# this target will be built if submake not specify the target.
+#
+# see [following `$(obj)/:` recipe](https://github.com/torvalds/linux/blob/6e64f4580381e32c06ee146ca807c555b8f73e24/scripts/Makefile.build#L537-L540)
+# for [building descending down in directories](https://docs.kernel.org/kbuild/makefiles.html#descending-down-in-directories).
 PHONY := $(obj)/
 $(obj)/:
 
@@ -95,6 +100,7 @@ obj-m := $(filter-out %/, $(obj-m))
 endif
 
 ifdef need-builtin
+# NOTE-XY: if `$(obj-y)` is a dir, then `dir/built-in.a` will be added to `obj-y`.
 obj-y		:= $(patsubst %/, %/built-in.a, $(obj-y))
 else
 obj-y		:= $(filter-out %/, $(obj-y))
@@ -163,6 +169,7 @@ endif
 # ===========================================================================
 
 # subdir-builtin and subdir-modorder may contain duplications. Use $(sort ...)
+# NOTE-XY: the sub-directories that need to build `built-in.a`
 subdir-builtin := $(sort $(filter %/built-in.a, $(real-obj-y)))
 subdir-modorder := $(sort $(filter %/modules.order, $(obj-m)))
 
@@ -173,6 +180,8 @@ targets-for-builtin += $(obj)/lib.a
 endif
 
 ifdef need-builtin
+# NOTE-XY: this line lead to:
+# target `$(obj)/` (example when expanded: `./`) requires target `./built-in.a`
 targets-for-builtin += $(obj)/built-in.a
 endif
 
@@ -497,6 +506,7 @@ quiet_cmd_ar_builtin = AR      $@
 	$(if $(real-prereqs), printf "$(obj)/%s " $(patsubst $(obj)/%,%,$(real-prereqs)) | xargs) \
 	$(AR) cDPrST $@
 
+# NOTE-XY: the recipe to build `$(obj)/built-in.a`
 $(obj)/built-in.a: $(real-obj-y) FORCE
 	$(call if_changed,ar_builtin)
 
@@ -563,7 +573,34 @@ endif
 
 # Build
 # ---------------------------------------------------------------------------
-
+# NOTE-XY: this will trigger the descending build process.
+# normally, [KBUILD_BUILTIN](https://github.com/torvalds/linux/blob/6e64f4580381e32c06ee146ca807c555b8f73e24/Makefile#L764) and [KBUILD_MODULES](https://github.com/torvalds/linux/blob/6e64f4580381e32c06ee146ca807c555b8f73e24/Makefile#L780) will be true.
+#
+# in [descending down in directories](https://docs.kernel.org/kbuild/makefiles.html#descending-down-in-directories) process:
+# `need-builtin` and `need-modorder` will be [set to 1](https://github.com/torvalds/linux/blob/6e64f4580381e32c06ee146ca807c555b8f73e24/Makefile#L2011).
+#  and lead to `targets-for-builtin` [contains the `$(obj)/built-in.a`](https://github.com/torvalds/linux/blob/6e64f4580381e32c06ee146ca807c555b8f73e24/scripts/Makefile.build#L148C1-L149C1).
+#  - see recipe to build [`$(obj)/built-in.a`](https://github.com/torvalds/linux/blob/6e64f4580381e32c06ee146ca807c555b8f73e24/scripts/Makefile.build#L472-L473),
+#    ```makefile
+#    $(obj)/built-in.a: $(real-obj-y) FORCE
+#  	 $(call if_changed,ar_builtin)
+#	 ```
+#   > where `$(real-obj-y)` is the list of [`dir/built-in.a`](https://github.com/torvalds/linux/blob/6e64f4580381e32c06ee146ca807c555b8f73e24/scripts/Makefile.build#L75) and [objects](https://github.com/torvalds/linux/blob/6e64f4580381e32c06ee146ca807c555b8f73e24/scripts/Makefile.build#L94) to be built.
+#   > ```makefile
+#   > obj-y		:= $(patsubst %/, %/built-in.a, $(obj-y))
+#   > ```
+#
+# - how to build `%/built-in.a`?
+#   - see [`subdir-builtin` definition](https://github.com/torvalds/linux/blob/6e64f4580381e32c06ee146ca807c555b8f73e24/scripts/Makefile.build#L138C1-L138C64) in this file.
+#     ```makefile
+#     subdir-builtin := $(sort $(filter %/built-in.a, $(real-obj-y)))
+#	  ```
+#   - see [`$(subdir-builtin)` recipe](https://github.com/torvalds/linux/blob/6e64f4580381e32c06ee146ca807c555b8f73e24/scripts/Makefile.build#L458)
+#     ```makefile
+#     $(subdir-builtin): $(obj)/%/built-in.a: $(obj)/% ;
+#     ```
+#     and the `$(obj)/%` is built by the [`$(subdir-ym)` recipe](https://github.com/torvalds/linux/blob/6e64f4580381e32c06ee146ca807c555b8f73e24/scripts/Makefile.build#L555-L559).
+#     > 1. `subdir-ym` is initialized by `$(subdir-y)` and [part of `$(obj-y)` that is a dir](https://github.com/torvalds/linux/blob/6e64f4580381e32c06ee146ca807c555b8f73e24/scripts/Makefile.build#L57-L58).
+#     > 2. `subdir-ym` [add the prefix `$(obj)/`](https://github.com/torvalds/linux/blob/6e64f4580381e32c06ee146ca807c555b8f73e24/scripts/Makefile.build#L121).`
 $(obj)/: $(if $(KBUILD_BUILTIN), $(targets-for-builtin)) \
 	 $(if $(KBUILD_MODULES), $(targets-for-modules)) \
 	 $(subdir-ym) $(always-y)

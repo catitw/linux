@@ -31,6 +31,13 @@ targets += arch/$(SRCARCH)/kernel/asm-offsets.s
 
 arch/$(SRCARCH)/kernel/asm-offsets.s: $(timeconst-file) $(bounds-file)
 
+# NOTE-XY:
+# - `filechk` defined in file `scripts/Kbuild.include`
+# - `filechk_offsets` defined in file `scripts/Makefile.lib`
+# 
+# the generated file `include/generated/asm-offsets.h` defines the offset of 
+# field offset for kernel data structures(e.g: `struct cpuinfo_x86`).
+# > see more in file `arch/x86/kernel/asm-offsets.c`.
 $(offsets-file): arch/$(SRCARCH)/kernel/asm-offsets.s FORCE
 	$(call filechk,offsets,__ASM_OFFSETS_H__)
 
@@ -39,6 +46,7 @@ $(offsets-file): arch/$(SRCARCH)/kernel/asm-offsets.s FORCE
 quiet_cmd_syscalls = CALL    $<
       cmd_syscalls = $(CONFIG_SHELL) $< $(CC) $(c_flags) $(missing_syscalls_flags)
 
+# NOTE-XY: this will check if we have any missing system calls implementation
 PHONY += missing-syscalls
 missing-syscalls: scripts/checksyscalls.sh $(offsets-file)
 	$(call cmd,syscalls)
@@ -70,12 +78,15 @@ $(atomic-checks): $(obj)/.checked-%: include/linux/atomic/%  FORCE
 # A phony target that depends on all the preparation targets
 
 PHONY += prepare
+# NOTE-XY: here we define the `prepare` target, note this is different from the same name
+# target defined in top makefile.
 prepare: $(offsets-file) missing-syscalls $(atomic-checks)
 	@:
 
 # Ordinary directory descending
 # ---------------------------------------------------------------------------
-
+# NOTE-XY: here we define the `obj-y` variable, it will be used to build the kernel
+# [descending down in directories](https://docs.kernel.org/kbuild/makefiles.html#descending-down-in-directories).
 obj-y			+= init/
 obj-y			+= usr/
 obj-y			+= arch/$(SRCARCH)/
