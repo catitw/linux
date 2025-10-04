@@ -761,6 +761,7 @@ targets :=
 # Normally, just do built-in.
 
 KBUILD_MODULES :=
+# NOTE: 默认设置KBUILD_BUILTIN为y
 KBUILD_BUILTIN := y
 
 # If we have only "make modules", don't compile built-in objects.
@@ -2007,8 +2008,11 @@ prepare: outputmakefile
 # make menuconfig etc.
 # Error messages still appears in the original language
 PHONY += $(build-dir)
+
+# NOTE: 构建入口
 $(build-dir): prepare
 	$(Q)$(MAKE) $(build)=$@ need-builtin=1 need-modorder=1 $(single-goals)
+	@# NOTE: 等价于 `make -f $(srctree)/scripts/Makefile.build obj=. need-builtin=1 need-modorder=1`
 
 clean-dirs := $(addprefix _clean_, $(clean-dirs))
 PHONY += $(clean-dirs) clean

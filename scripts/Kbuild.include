@@ -62,6 +62,7 @@ stringify = $(squote)$(quote)$1$(quote)$(squote)
 
 ###
 # The path to Kbuild or Makefile. Kbuild has precedence over Makefile.
+# NOTE: `kbuild-file`定义在这
 kbuild-file = $(or $(wildcard $(src)/Kbuild),$(src)/Makefile)
 
 ###
@@ -110,6 +111,7 @@ endef
 # Shorthand for $(Q)$(MAKE) -f scripts/Makefile.build obj=
 # Usage:
 # $(Q)$(MAKE) $(build)=dir
+# NOTE: `build`变量的定义在这里
 build := -f $(srctree)/scripts/Makefile.build obj
 
 ###
