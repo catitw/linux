@@ -38,14 +38,23 @@ __all:
 # descending is started. They are now explicitly listed as the
 # prepare rule.
 
+# NOTE-XY: https://www.gnu.org/software/make/manual/make.html#:~:text=%E5%B1%9E%E6%80%A7%E7%9A%84%E5%8F%98%E9%87%8F%E3%80%82-,MAKEFILE_LIST,-Contains%20the%20name
 this-makefile := $(lastword $(MAKEFILE_LIST))
 abs_srctree := $(realpath $(dir $(this-makefile)))
+# NOTE-XY: https://www.gnu.org/software/make/manual/make.html#:~:text=%E7%9B%AE%E6%A0%87%E7%9A%84%E5%8F%82%E6%95%B0%E2%80%9D%E3%80%82-,CURDIR,-Set%20to%20the
 abs_output := $(CURDIR)
 
+# NOTE-XY: `sub_make_done` is used to avoid re-entering the same Makefile.
+# if `sub_make_done` is not set, we are in the top-level Makefile, and will be export to 1 and then re-enter this Makefile later.
 ifneq ($(sub_make_done),1)
 
 # Do not use make's built-in rules and variables
 # (this increases performance and avoids hard-to-debug behaviour)
+# NOTE-XY:
+# - `-r`: https://www.gnu.org/software/make/manual/make.html#index-_002d_002dno_002dbuiltin_002drules
+# - `-R`: https://www.gnu.org/software/make/manual/make.html#index-_002d_002dno_002dbuiltin_002dvariables
+#
+# > check the diff between command `make -p` and `MAKEFLAGS=-rR make -p`.
 MAKEFLAGS += -rR
 
 # Avoid funny character set dependencies
@@ -98,6 +107,17 @@ quiet=silent_
 override KBUILD_VERBOSE :=
 endif
 
+# NOTE-XY:
+# - the echo mechanism implementaion:
+#   1. see related `kecho` function implement in file `scripts/Kbuild.include`
+#	   > [`kecho` implement](https://github.com/catitw/linux/blob/81877803bf3bd70e6c2788f79d2138b11d5abac6/scripts/Kbuild.include#L79-L82)
+#      > [`$(kecho)` usage](https://docs.kernel.org/kbuild/makefiles.html#:~:text=%E6%97%B6%E5%88%99%E4%B8%8D%E5%90%8C%E3%80%82-,%24(kecho),-echoing%20information%20to)
+#   2. see related `cmd` function implement in file `scripts/Kbuild.include`
+#      > [`cmd` implement](https://github.com/catitw/linux/blob/81877803bf3bd70e6c2788f79d2138b11d5abac6/scripts/Kbuild.include#L159)
+#
+# - Normally make prints each line of the recipe before it is executed.
+#   However, when a line starts with ‘@’, the echoing of that line is suppressed.
+#   > [Recipe Echoing](https://www.gnu.org/software/make/manual/make.html#Echoing)
 export quiet Q KBUILD_VERBOSE
 
 # Call a source code checker (by default, "sparse") as part of the
@@ -138,9 +158,13 @@ ifeq ("$(origin MO)", "command line")
   KBUILD_EXTMOD_OUTPUT := $(MO)
 endif
 
+# NOTE-XY: only support build single external module at a time.
 $(if $(word 2, $(KBUILD_EXTMOD)), \
 	$(error building multiple external modules is not supported))
 
+# NOTE-XY: module directory path can NOT contains `%` or `:`
+# `%` is used in makefile for pattern matching.
+# `:` is used in makefile for defining recipes.
 $(foreach x, % :, $(if $(findstring $x, $(KBUILD_EXTMOD)), \
 	$(error module directory path cannot contain '$x')))
 
@@ -202,6 +226,13 @@ else
     output := $(KBUILD_OUTPUT)
 endif
 
+# NOTE-XY:
+# - objtree: refers to the root of the kernel object tree. It is . when building the kernel, but it is different when building external modules.
+#   > see [`$(objtree)`](https://docs.kernel.org/kbuild/makefiles.html#:~:text=same%20as%20%24(srcroot).-,%24(objtree),-%24(objtree)%20refers%20to)
+#
+# - srcroot: refers to the root of the source you are building, which can be either the kernel source or the external modules source.
+#   > see [`$(srcroot)`](https://docs.kernel.org/kbuild/makefiles.html#:~:text=not%20generated%20files).-,%24(srcroot),-%24(srcroot)%20refers%20to)
+
 export objtree srcroot
 
 # Do we want to change the working directory?
@@ -219,6 +250,10 @@ endif
 
 export sub_make_done := 1
 
+# NOTE-XY: what does the branch `sub_make_done` do:
+# - clear built-in rules and variables.
+# - export env vars for verbose setting.
+# - export env vars for path of source directory and object directory.
 endif # sub_make_done
 
 ifeq ($(abs_output),$(CURDIR))
@@ -236,6 +271,7 @@ ifeq ($(filter --no-print-directory, $(MAKEFLAGS)),)
 need-sub-make := 1
 endif
 
+# NOTE-XY: if `$(CURDIR)` is not the final `$(abs_output)`, invoke a second make.
 ifeq ($(need-sub-make),1)
 
 PHONY += $(MAKECMDGOALS) __sub-make
@@ -249,6 +285,7 @@ __sub-make:
 	-f $(abs_srctree)/Makefile $(MAKECMDGOALS)
 
 else # need-sub-make
+# NOTE-XY: now the `$(CURDIR)` is the final `$(abs_output)`.
 
 # We process the rest of the Makefile if this is the final invocation of make
 
@@ -274,6 +311,8 @@ endif
 
 export srctree := $(if $(KBUILD_EXTMOD),$(abs_srctree),$(srcroot))
 
+# NOTE-XY:
+# see [Makefile VPATH](https://www.gnu.org/software/make/manual/make.html#Directory-Search)
 ifdef building_out_of_srctree
 export VPATH := $(srcroot)
 else
@@ -291,6 +330,7 @@ endif
 version_h := include/generated/uapi/linux/version.h
 
 clean-targets := %clean mrproper cleandocs
+# NOTE-XY: targets that do not need `.config` file.
 no-dot-config-targets := $(clean-targets) \
 			 cscope gtags TAGS tags help% %docs check% coccicheck \
 			 $(version_h) headers headers_% archheaders archscripts \
@@ -306,12 +346,17 @@ need-config	:= 1
 may-sync-config	:= 1
 single-build	:=
 
+# NOTE-XY: if `$(MAKECMDGOALS)` contains any target in `$(no-dot-config-targets)`, then ...
 ifneq ($(filter $(no-dot-config-targets), $(MAKECMDGOALS)),)
+	# NOTE-XY: if `$(MAKECMDGOALS)` do not contain target that out of `$(no-dot-config-targets)`, then ...
     ifeq ($(filter-out $(no-dot-config-targets), $(MAKECMDGOALS)),)
+		# NOTE-XY: all targets are no-dot-config targets, so unset `need-config`
         need-config :=
     endif
 endif
 
+# same as `no-dot-config-targets`. unset the `may-sync-config` if `$(MAKECMDGOALS)` 
+# all targets are `$(no-sync-config-targets)`.
 ifneq ($(filter $(no-sync-config-targets), $(MAKECMDGOALS)),)
     ifeq ($(filter-out $(no-sync-config-targets), $(MAKECMDGOALS)),)
         may-sync-config :=
@@ -335,8 +380,10 @@ endif
 
 # We cannot build single targets and the others at the same time
 ifneq ($(filter $(single-targets), $(MAKECMDGOALS)),)
+	# NOTE-XY: set `single-build` if `$(MAKECMDGOALS)` contains any single target.
     single-build := 1
     ifneq ($(filter-out $(single-targets), $(MAKECMDGOALS)),)
+		# NOTE-XY: targets has both single target and other targets, so set `mixed-build`.
         mixed-build := 1
     endif
 endif
@@ -344,6 +391,7 @@ endif
 # For "make -j clean all", "make -j mrproper defconfig all", etc.
 ifneq ($(filter $(clean-targets),$(MAKECMDGOALS)),)
     ifneq ($(filter-out $(clean-targets),$(MAKECMDGOALS)),)
+		# NOTE-XY: targets has both clean target and other targets, so set `mixed-build`.
         mixed-build := 1
     endif
 endif
@@ -365,6 +413,7 @@ PHONY += $(MAKECMDGOALS) __build_one_by_one
 $(MAKECMDGOALS): __build_one_by_one
 	@:
 
+# NOTE-XY: if `mixed-build` is set, then build them one by one.
 __build_one_by_one:
 	$(Q)set -e; \
 	for i in $(MAKECMDGOALS); do \
@@ -380,6 +429,7 @@ KERNELRELEASE = $(call read-file, $(objtree)/include/config/kernel.release)
 KERNELVERSION = $(VERSION)$(if $(PATCHLEVEL),.$(PATCHLEVEL)$(if $(SUBLEVEL),.$(SUBLEVEL)))$(EXTRAVERSION)
 export VERSION PATCHLEVEL SUBLEVEL KERNELRELEASE KERNELVERSION
 
+# NOTE-XY: include this file for just getting variable `SUBARCH`.
 include $(srctree)/scripts/subarch.include
 
 # Cross compiling and selecting different set of gcc/bin-utils
@@ -463,8 +513,9 @@ HOSTPKG_CONFIG	= pkg-config
 KERNELDOC       = $(srctree)/scripts/kernel-doc.py
 export KERNELDOC
 
+# NOTE-XY: update this to debugging hostprogs. e.g: "-O0 -g3"
 KBUILD_USERHOSTCFLAGS := -Wall -Wmissing-prototypes -Wstrict-prototypes \
-			 -O2 -fomit-frame-pointer -std=gnu11
+			 -O0 -g3 -fomit-frame-pointer -std=gnu11
 KBUILD_USERCFLAGS  := $(KBUILD_USERHOSTCFLAGS) $(USERCFLAGS)
 KBUILD_USERLDFLAGS := $(USERLDFLAGS)
 
@@ -738,6 +789,11 @@ export KBUILD_DEFCONFIG KBUILD_KCONFIG CC_VERSION_TEXT RUSTC_VERSION_TEXT
 config: outputmakefile scripts_basic FORCE
 	$(Q)$(MAKE) $(build)=scripts/kconfig $@
 
+# NOTE-XY: here we define the `%config` target. the command for example `make defconfig` will call this target.
+# variable `build` is defined in the file `Kbuild.include`, the expanded command equals to:
+# ```bash
+# make -f $(srctree)/scripts/Makefile.build obj=scripts/kconfig defconfig
+# ```
 %config: outputmakefile scripts_basic FORCE
 	$(Q)$(MAKE) $(build)=scripts/kconfig $@
 
@@ -750,6 +806,7 @@ else #!config-build
 # but instead __all depend on modules
 PHONY += all
 ifeq ($(KBUILD_EXTMOD),)
+# NOTE-XY: for commandline "build -jN", we will enter this if branch
 __all: all
 else
 __all: modules
@@ -797,6 +854,7 @@ endif # KBUILD_EXTMOD
 # command line.
 # This allow a user to issue only 'make' to build a kernel including modules
 # Defaults to vmlinux, but the arch makefile usually adds further targets
+# NOTE-XY: here target `all` requires target `vmlinux`
 all: vmlinux
 
 CFLAGS_GCOV	:= -fprofile-arcs -ftest-coverage
@@ -1197,6 +1255,14 @@ export ARCH_LIB		:= $(filter %/, $(libs-y))
 export ARCH_DRIVERS	:= $(drivers-y) $(drivers-m)
 # Externally visible symbols (used by link-vmlinux.sh)
 
+# NOTE-XY:
+# - `libs-y` contains:
+#   - `lib/` always, 			see current file definitaion.
+#   - `arch/x86/lib/` for x86,	see `arch/x86/Makefile`.
+#
+# - exmaple: if `libs-y` is `lib/ arch/x86/lib/`, then `KBUILD_VMLINUX_OBJS` will be:
+#   `built-in.a lib/lib.a arch/x86/lib/lib.a`
+#   > TOOD: how do we build such `lib.a`?
 KBUILD_VMLINUX_OBJS := built-in.a $(patsubst %/, %/lib.a, $(filter %/, $(libs-y)))
 KBUILD_VMLINUX_LIBS := $(filter-out %/, $(libs-y))
 
@@ -1217,13 +1283,17 @@ quiet_cmd_ar_vmlinux.a = AR      $@
 	$(AR) mPiT $$($(AR) t $@ | sed -n 1p) $@ $$($(AR) t $@ | grep -F -f $(srctree)/scripts/head-object-list.txt)
 
 targets += vmlinux.a
+# NOTE-XY: here target `vmlinux.a` requires target `built-in.a`.
+# > and `$(KBUILD_VMLINUX_OBJS)` requires target `.`.
 vmlinux.a: $(KBUILD_VMLINUX_OBJS) scripts/head-object-list.txt FORCE
 	$(call if_changed,ar_vmlinux.a)
 
 PHONY += vmlinux_o
+# NOTE-XY: here target `vmlinux_o` requires target `vmlinux.a`
 vmlinux_o: vmlinux.a $(KBUILD_VMLINUX_LIBS)
 	$(Q)$(MAKE) -f $(srctree)/scripts/Makefile.vmlinux_o
 
+# NOTE-XY: here target `vmlinux.o` requires target `vmlinux_o`
 vmlinux.o modules.builtin.modinfo modules.builtin: vmlinux_o
 	@:
 
@@ -1240,11 +1310,14 @@ PHONY += vmlinux
 #  vmlinux: private export LDFLAGS_vmlinux := $(LDFLAGS_vmlinux)
 vmlinux: private _LDFLAGS_vmlinux := $(LDFLAGS_vmlinux)
 vmlinux: export LDFLAGS_vmlinux = $(_LDFLAGS_vmlinux)
+# NOTE-XY: here target `vmlinux` requires target `vmlinux.o`
 vmlinux: vmlinux.o $(KBUILD_LDS) modpost
 	$(Q)$(MAKE) -f $(srctree)/scripts/Makefile.vmlinux
 
 # The actual objects are generated when descending,
 # make sure no implicit rule kicks in
+# NOTE-XY: here target `$(KBUILD_VMLINUX_OBJS)` require target `.`
+# > and `$(build-dir)` requires target `prepare`.
 $(sort $(KBUILD_LDS) $(KBUILD_VMLINUX_OBJS) $(KBUILD_VMLINUX_LIBS)): . ;
 
 ifeq ($(origin KERNELRELEASE),file)
@@ -1277,11 +1350,18 @@ archprepare: outputmakefile archheaders archscripts scripts include/config/kerne
 	include/generated/compile.h include/generated/autoconf.h \
 	include/generated/rustc_cfg remove-stale-files
 
+# NOTE-XY: here target `prepare0` requires target `archprepare`
 prepare0: archprepare
 	$(Q)$(MAKE) $(build)=scripts/mod
+	@# NOTE-XY: here we called the `$(build)=.`, cause dir `$(srcroot)/.` has file `Kbuild`,
+	@# we will include that file, and build the recipe `prepare` defined in 
+	@# that `Kbuild` file(not the same name recipe in current file).
+	@# > why we will include it? 
+	@# > ans: see line `include $(kbuild-file)` in the file `scripts/Makefile.build`.
 	$(Q)$(MAKE) $(build)=. prepare
 
 # All the preparing..
+# NOTE-XY: here target `prepare` requires target `prepare0`
 prepare: prepare0
 ifdef CONFIG_RUST
 	+$(Q)$(CONFIG_SHELL) $(srctree)/scripts/rust_is_available.sh
@@ -1870,6 +1950,7 @@ filechk_kernel.release = echo $(KERNELRELEASE)
 KBUILD_BUILTIN :=
 KBUILD_MODULES := y
 
+# NOTE-XY: here we define the `build-dir` to be `.`
 build-dir := .
 
 clean-dirs := .
@@ -2007,7 +2088,13 @@ prepare: outputmakefile
 # make menuconfig etc.
 # Error messages still appears in the original language
 PHONY += $(build-dir)
+# NOTE-XY: here target `$(build-dir)` which evalutes to `.` requires target `prepare`
 $(build-dir): prepare
+	@# NOTE-XY: the key key key process to build target `vmlinux`.
+	@# it will expanded to: 
+	@# `make -f ./scripts/Makefile.build obj=. need-builtin=1 need-modorder=1`
+	@#
+	@# > here we not specify the target, so the first target `$(obj)/` will be built.
 	$(Q)$(MAKE) $(build)=$@ need-builtin=1 need-modorder=1 $(single-goals)
 
 clean-dirs := $(addprefix _clean_, $(clean-dirs))

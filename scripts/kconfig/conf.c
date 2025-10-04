@@ -47,6 +47,164 @@ static int conf_cnt;
 static char line[PATH_MAX];
 static struct menu *rootEntry;
 
+// Declare the external `environ` variable, which is a NULL-terminated
+// array of strings, where each string is an environment variable.
+extern char **environ;
+
+// Declare the external `environ` variable, which is a NULL-terminated
+// array of strings, where each string is an environment variable.
+extern char **environ;
+
+/**
+ * @brief Writes a C string to a file stream as a valid JSON string,
+ *        handling necessary character escaping.
+ *
+ * @param fp   The target file stream.
+ * @param str  The C string to be written.
+ */
+static void write_json_string(FILE *fp, const char *str)
+{
+	fputc('"', fp);
+	for (const char *p = str; *p; p++) {
+		switch (*p) {
+		case '"':
+			fprintf(fp, "\\\"");
+			break;
+		case '\\':
+			fprintf(fp, "\\\\");
+			break;
+		case '\b':
+			fprintf(fp, "\\b");
+			break;
+		case '\f':
+			fprintf(fp, "\\f");
+			break;
+		case '\n':
+			fprintf(fp, "\\n");
+			break;
+		case '\r':
+			fprintf(fp, "\\r");
+			break;
+		case '\t':
+			fprintf(fp, "\\t");
+			break;
+		default:
+			// Escape ASCII control characters (0-31)
+			if ((unsigned char)*p < 32) {
+				fprintf(fp, "\\u%04x", (unsigned char)*p);
+			} else {
+				fputc(*p, fp);
+			}
+			break;
+		}
+	}
+	fputc('"', fp);
+}
+
+/**
+ * @brief Dumps program information (arguments, CWD, and environment variables)
+ *        to a temporary file. The environment variables are formatted as a JSON object.
+ *
+ * @param argc The argument count from main().
+ * @param argv The argument vector from main().
+ *
+ * @return On success, returns a pointer to the path of the newly created file.
+ *         The caller is responsible for freeing this memory using free().
+ *         Returns NULL on failure.
+ */
+static char *dump_info_to_temp_file(int argc, char *argv[])
+{
+	// 1. Create a template for the temporary file name.
+	// The "XXXXXX" part will be replaced by mkstemp to ensure uniqueness.
+	char template[] = "/tmp/prog_info_dump_XXXXXX";
+
+	// mkstemp creates and opens the file securely, preventing race conditions.
+	int fd = mkstemp(template);
+	if (fd == -1) {
+		perror("Failed to create temporary file (mkstemp)");
+		return NULL;
+	}
+
+	// 2. Convert the file descriptor to a FILE* stream for easier I/O.
+	FILE *fp = fdopen(fd, "w");
+	if (fp == NULL) {
+		perror("Failed to open file stream (fdopen)");
+		close(fd); // Clean up the file descriptor
+		return NULL;
+	}
+
+	printf("Writing hostprog `conf` info to file: %s\n", template);
+
+	// 3. Write the first line: Program arguments (Args)
+	fprintf(fp, "Args: ");
+	for (int i = 0; i < argc; i++) {
+		fprintf(fp, "%s%s", argv[i], (i == argc - 1) ? "" : " ");
+	}
+	fprintf(fp, "\n");
+
+	// 4. Write the second line: Current Working Directory (CWD)
+	char cwd_buffer[PATH_MAX];
+	if (getcwd(cwd_buffer, sizeof(cwd_buffer)) != NULL) {
+		fprintf(fp, "CWD: %s\n", cwd_buffer);
+	} else {
+		perror("Failed to get current working directory (getcwd)");
+	}
+
+	// 5. Write the environment variables as a JSON object.
+	fprintf(fp, "\n--- Environment Variables (JSON) ---\n");
+	fprintf(fp, "{\n");
+
+	char **env = environ;
+	while (*env != NULL) {
+		char *env_string = *env;
+		char *eq_ptr = strchr(env_string, '=');
+
+		if (eq_ptr != NULL) {
+			// Split the "KEY=VALUE" string
+			size_t key_len = eq_ptr - env_string;
+			char key[key_len + 1];
+			strncpy(key, env_string, key_len);
+			key[key_len] = '\0'; // Manually null-terminate
+
+			char *value = eq_ptr + 1;
+
+			// Write indented key
+			fprintf(fp, "    ");
+			write_json_string(fp, key);
+
+			fprintf(fp, ": ");
+
+			// Write value
+			write_json_string(fp, value);
+
+			// Add a comma if this is not the last environment variable
+			if (*(env + 1) != NULL) {
+				fprintf(fp, ",\n");
+			} else {
+				fprintf(fp, "\n");
+			}
+		}
+		env++;
+	}
+
+	fprintf(fp, "}\n");
+
+	// 6. Close the file stream. This also flushes buffers and closes the underlying fd.
+	fclose(fp);
+
+	// 7. Duplicate the filename string for the return value.
+	// `strdup` allocates memory on the heap, which the caller must free.
+	// This is necessary because `template` is a local stack variable.
+	char *file_path = strdup(template);
+	if (file_path == NULL) {
+		perror("Failed to allocate memory (strdup)");
+		return NULL;
+	}
+
+	return file_path;
+}
+
+
 static void print_help(struct menu *menu)
 {
 	struct gstr help = str_new();
@@ -660,6 +818,12 @@ static void conf_usage(const char *progname)
 
 int main(int ac, char **av)
 {
+	if (getenv("CONF_DUMP_ENV")) {
+		// breakpoints:
+		// - function `zconf_nextfile` in generated file `lexer.lex.c`.
+		dump_info_to_temp_file(ac, av);
+	}
+
 	const char *progname = av[0];
 	int opt;
 	const char *name, *defconfig_file = NULL /* gcc uninit */;

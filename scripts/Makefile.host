@@ -51,6 +51,9 @@ host-csingle	:= $(foreach m,$(hostprogs), \
 			$(if $($(m)-objs)$($(m)-cxxobjs)$($(m)-rust),,$(m)))
 
 # C executables linked based on several .o files
+# NOTE-XY: for exmaple building the host executable `conf` (search `hostprogs += conf` in file `scripts/kconfig/Makefile`).
+# - the variable `conf-objs` is `conf.o confdata.o expr.o lexer.lex.o menu.o parser.tab.o ...` (TODO: link)
+# `host-cmulti` will be evaluated as string `conf` finally.
 host-cmulti	:= $(foreach m,$(hostprogs),\
 		   $(if $($(m)-cxxobjs)$($(m)-rust),,$(if $($(m)-objs),$(m))))
 
@@ -71,6 +74,7 @@ host-cxxobjs	:= $(sort $(foreach m,$(host-cxxmulti),$($(m)-cxxobjs)))
 host-rust	:= $(foreach m,$(hostprogs),$(if $($(m)-rust),$(m)))
 
 host-csingle	:= $(addprefix $(obj)/,$(host-csingle))
+# NOTE-XY: here we addprefix.
 host-cmulti	:= $(addprefix $(obj)/,$(host-cmulti))
 host-cobjs	:= $(addprefix $(obj)/,$(host-cobjs))
 host-cxxmulti	:= $(addprefix $(obj)/,$(host-cxxmulti))
@@ -119,8 +123,11 @@ quiet_cmd_host-cmulti	= HOSTLD  $@
       cmd_host-cmulti	= $(HOSTCC) $(KBUILD_HOSTLDFLAGS) -o $@ \
 			  $(addprefix $(obj)/, $($(target-stem)-objs)) \
 			  $(KBUILD_HOSTLDLIBS) $(HOSTLDLIBS_$(target-stem))
+# NOTE-XY: here we add a rule to build target `$(host-cmulti)`.
 $(host-cmulti): FORCE
 	$(call if_changed,host-cmulti)
+# NOTE-XY: `multi_depend` defined in file `Makefile.lib`.
+# it will generate recipe rule to build the target `$(host-cmulti)`.
 $(call multi_depend, $(host-cmulti), , -objs)
 
 # Create .o file from a single .c file

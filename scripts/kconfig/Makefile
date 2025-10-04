@@ -6,9 +6,13 @@
 ifdef KBUILD_KCONFIG
 Kconfig := $(KBUILD_KCONFIG)
 else
+# NOTE-XY: normally, this branch is true.
 Kconfig := Kconfig
 endif
 
+# NOTE-XY: 
+# for x86-64, this variable already defined in the file `arch/x86/Makefile`，
+# and that file is included by the [main Makefile](https://github.com/catitw/linux/blob/147637c84bc55871790f4c7016b053a5c2dc978e/Makefile#L784).
 ifndef KBUILD_DEFCONFIG
 KBUILD_DEFCONFIG := defconfig
 endif
@@ -89,8 +93,23 @@ PHONY += savedefconfig defconfig
 savedefconfig: $(obj)/conf
 	$(Q)$< $(silent) --$@=defconfig $(Kconfig)
 
+# NOTE-XY: here we define the target `defconfig`, and it requires the target `$(obj)/conf`.
+#
+# where is the recipe to build `$(obj)/conf`?
+# 0. current makefile is include in `Makefile.build` first. todo: link
+# 1. current makefile add executable `conf` to variable `hostprogs`.
+# 2. in file `Makefile.build`, it sort variable `hostprogs`. todo: link
+# 3. in file `Makefile.build`, it include the `Makefile.host` file. todo: link
+# 4. in file `Makefile.host`, variable `host-cmulti` evaluates to `conf`.
+# 5. in file `Makefile.host`, `$(call multi_depend, $(host-cmulti), , -objs)` generate the
+#    recipe rule to build the target `$(obj)/conf`, it depends on the target `$(obj)/$(conf-objs)`.
 defconfig: $(obj)/conf
 ifneq ($(wildcard $(srctree)/arch/$(SRCARCH)/configs/$(KBUILD_DEFCONFIG)),)
+# NOTE-XY: this branch is true for x86-64 `make defconfig`.
+# 
+# the expanded command is: 
+# `$(obj)/conf $(silent) --defconfig=arch/x86/configs/x86_64_defconfig Kconfig`
+# > variable `silent` is defined [in the beginning of this file](https://github.com/catitw/linux/blob/147637c84bc55871790f4c7016b053a5c2dc978e/scripts/kconfig/Makefile#L16-L18).
 	@$(kecho) "*** Default configuration is based on '$(KBUILD_DEFCONFIG)'"
 	$(Q)$< $(silent) --defconfig=arch/$(SRCARCH)/configs/$(KBUILD_DEFCONFIG) $(Kconfig)
 else
@@ -171,6 +190,7 @@ HOSTCFLAGS_lexer.lex.o	:= -I $(src)
 HOSTCFLAGS_parser.tab.o	:= -I $(src)
 
 # conf: Used for defconfig, oldconfig and related targets
+# NOTE-XY: variables for building executable `conf`
 hostprogs	+= conf
 conf-objs	:= conf.o $(common-objs)
 
