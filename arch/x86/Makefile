@@ -317,6 +317,8 @@ bzImage: vmlinux
 ifeq ($(CONFIG_X86_DECODER_SELFTEST),y)
 	$(Q)$(MAKE) $(build)=arch/x86/tools posttest
 endif
+  # NOTE: 入口
+  # 等价于: `make -f $(srctree)/scripts/Makefile.build obj=arch/x86/boot arch/x86/boot/bzImage`
 	$(Q)$(MAKE) $(build)=$(boot) $(KBUILD_IMAGE)
 	$(Q)mkdir -p $(objtree)/arch/$(UTS_MACHINE)/boot
 	$(Q)ln -fsn ../../x86/boot/bzImage $(objtree)/arch/$(UTS_MACHINE)/boot/$@

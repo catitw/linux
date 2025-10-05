@@ -40,6 +40,8 @@ include $(srctree)/scripts/Makefile.compiler
 # 即优先选名为Kbuild的文件，其次选名为Makefile的文件
 #
 # include这个文件最重要的是指定递归构建的骨架
+#
+# 当构建`bzImage`时，`kbuild-file`为`$(src)/arch/x86/boot/Makefile`
 include $(kbuild-file)
 include $(srctree)/scripts/Makefile.lib
 

@@ -61,11 +61,13 @@ $(obj)/bzImage: asflags-y  := $(SVGA_MODE)
 quiet_cmd_image = BUILD   $@
       cmd_image = (dd if=$< bs=4k conv=sync status=none; cat $(filter-out $<,$(real-prereqs))) >$@
 
+# NOTE: 定义依赖规则(入口规则)
 $(obj)/bzImage: $(obj)/setup.bin $(obj)/vmlinux.bin FORCE
 	$(call if_changed,image)
 	@$(kecho) 'Kernel: $@ is ready' ' (#'$(or $(KBUILD_BUILD_VERSION),`cat .version`)')'
 
 OBJCOPYFLAGS_vmlinux.bin := -O binary -R .note -R .comment -S
+# NOTE: 定义依赖规则
 $(obj)/vmlinux.bin: $(obj)/compressed/vmlinux FORCE
 	$(call if_changed,objcopy)
 
@@ -77,6 +79,7 @@ quiet_cmd_zoffset = ZOFFSET $@
       cmd_zoffset = $(NM) $< | sed -n $(sed-zoffset) > $@
 
 targets += zoffset.h
+# NOTE: 定义依赖规则
 $(obj)/zoffset.h: $(obj)/compressed/vmlinux FORCE
 	$(call if_changed,zoffset)
 
@@ -85,13 +88,16 @@ AFLAGS_header.o += -I$(objtree)/$(obj)
 $(obj)/header.o: $(obj)/zoffset.h
 
 LDFLAGS_setup.elf	:= -m elf_i386 -z noexecstack -T
+# NOTE: 定义依赖规则
 $(obj)/setup.elf: $(src)/setup.ld $(SETUP_OBJS) FORCE
 	$(call if_changed,ld)
 
 OBJCOPYFLAGS_setup.bin	:= -O binary
+# NOTE: 定义依赖规则
 $(obj)/setup.bin: $(obj)/setup.elf FORCE
 	$(call if_changed,objcopy)
 
+# NOTE: 定义依赖规则
 $(obj)/compressed/vmlinux: FORCE
 	$(Q)$(MAKE) $(build)=$(obj)/compressed $@
 

@@ -37,6 +37,7 @@ int main(int argc, char *argv[])
 	}
 
 
+	// 先读取最后四个字节，组成olen(其保存着解压缩后， 文件的大小)
 	if (fseek(f, -4L, SEEK_END)) {
 		perror(argv[1]);
 	}
@@ -46,7 +47,7 @@ int main(int argc, char *argv[])
 		goto bail;
 	}
 
-	ilen = ftell(f);
+	ilen = ftell(f);	// 被压缩后的文件的总大小
 	olen = get_unaligned_le32(&olen);
 
 	printf(".section \".rodata..compressed\",\"a\",@progbits\n");
@@ -57,6 +58,9 @@ int main(int argc, char *argv[])
 
 	printf(".globl input_data, input_data_end\n");
 	printf("input_data:\n");
+	// `.incbin`的作用为: 
+	// 把压缩后的`$(obj)/vmlinux.bin.$(suffix-y)`的文件的内容include进来
+	// > https://sourceware.org/binutils/docs/as/Incbin.html
 	printf(".incbin \"%s\"\n", argv[1]);
 	printf("input_data_end:\n");
 
