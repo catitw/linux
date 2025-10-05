@@ -44,15 +44,20 @@ SYSSEG		= 0x1000		/* historical load address >> 4 */
 #ifdef CONFIG_EFI_STUB
 	# "MZ", MS-DOS header
 	.word	IMAGE_DOS_SIGNATURE
-	.org	0x38
+	.org	0x38		# .org: 修改location counter
 	#
 	# Offset to the PE header.
 	#
 	.long	LINUX_PE_MAGIC
+	# NOTE: 
+	# After the MS-DOS stub, at the file offset specified at offset 0x3c, is a 4-byte signature that identifies the file as a PE format image file.
+	# > https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#signature-image-only
 	.long	pe_header
 pe_header:
 	.long	IMAGE_NT_SIGNATURE
 
+# NOTE:
+# - [COFF File Header](https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#coff-file-header-object-and-image)
 coff_header:
 #ifdef CONFIG_X86_32
 	.set	image_file_add_flags, IMAGE_FILE_32BIT_MACHINE
@@ -63,6 +68,7 @@ coff_header:
 	.set	pe_opt_magic, IMAGE_NT_OPTIONAL_HDR64_MAGIC
 	.word	IMAGE_FILE_MACHINE_AMD64
 #endif
+    # NOTE: section_count是一个变量，计算过程在下面
 	.word	section_count			# nr_sections
 	.long	0 				# TimeDateStamp
 	.long	0				# PointerToSymbolTable
@@ -73,16 +79,24 @@ coff_header:
 		IMAGE_FILE_DEBUG_STRIPPED	| \
 		IMAGE_FILE_LINE_NUMS_STRIPPED	# Characteristics
 
+# NOTE:
+# - [Optional Header](https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#optional-header-standard-fields-image-only)
 optional_header:
+	# NOTE: pe_opt_magic是之前定义的变量
 	.word	pe_opt_magic
 	.byte	0x02				# MajorLinkerVersion
 	.byte	0x14				# MinorLinkerVersion
 
+	# NOTE:
 	.long	ZO__data			# SizeOfCode
 
+	# NOTE: .data段
 	.long	ZO__end - ZO__data		# SizeOfInitializedData
-	.long	0				# SizeOfUninitializedData
 
+	# NOTE: BSS段
+	.long	0				# SizeOfUninitializedData
+	
+	# NOTE: 程序文件加载进内存后，从这个虚拟地址开始执行
 	.long	setup_size + ZO_efi_pe_entry	# AddressOfEntryPoint
 
 	.long	setup_size			# BaseOfCode
@@ -110,6 +124,7 @@ extra_header_fields:
 
 	.long	salign				# SizeOfHeaders
 	.long	0				# CheckSum
+	# NOTE: 关注点
 	.word	IMAGE_SUBSYSTEM_EFI_APPLICATION	# Subsystem (EFI application)
 	.word	IMAGE_DLLCHARACTERISTICS_NX_COMPAT	# DllCharacteristics
 #ifdef CONFIG_X86_32
@@ -148,6 +163,7 @@ section_table:
 		IMAGE_SCN_MEM_READ		| \
 		IMAGE_SCN_MEM_DISCARDABLE	# Characteristics
 
+# NOTE: CONFIG_EFI_MIXED一般为N 
 #ifdef CONFIG_EFI_MIXED
 	.asciz	".compat"
 
@@ -220,6 +236,7 @@ pecompat_fstart:
 		IMAGE_SCN_MEM_READ		| \
 		IMAGE_SCN_MEM_WRITE		# Characteristics
 
+	# NOTE: 计算section_count
 	.set	section_count, (. - section_table) / 40
 #endif /* CONFIG_EFI_STUB */
 
@@ -306,6 +323,7 @@ ext_loader_ver:
 ext_loader_type:
 		.byte	0		# Extended boot loader type
 
+# NOTE: 关注点
 cmd_line_ptr:	.long	0		# (Header version 0x0202 or later)
 					# If nonzero, a 32-bit pointer
 					# to the kernel command line.
