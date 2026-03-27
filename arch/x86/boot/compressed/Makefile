@@ -85,6 +85,7 @@ $(obj)/../voffset.h: vmlinux FORCE
 
 $(obj)/misc.o: $(obj)/../voffset.h
 
+# NOTE: `vmlinux-objs-y` 包括了 `$(obj)/piggy.o`
 vmlinux-objs-y := $(obj)/vmlinux.lds $(obj)/kernel_info.o $(obj)/head_$(BITS).o \
 	$(obj)/misc.o $(obj)/string.o $(obj)/cmdline.o $(obj)/error.o \
 	$(obj)/piggy.o $(obj)/cpuflags.o
@@ -112,10 +113,13 @@ ifdef CONFIG_EFI_SBAT
 $(obj)/sbat.o: $(CONFIG_EFI_SBAT_FILE)
 endif
 
+# NOTE: 定义依赖规则
+# 其中`vmlinux-objs-y` 包括了 `$(obj)/piggy.o`, 而`$(obj)/piggy.o`是由`$(obj)/piggy.S`构建而来的
 $(obj)/vmlinux: $(vmlinux-objs-y) $(vmlinux-libs-y) FORCE
 	$(call if_changed,ld)
 
 OBJCOPYFLAGS_vmlinux.bin :=  -R .comment -S
+# NOTE: 定义依赖规则 (这里的vmlinux是指根构建目录下的vmlinux目标)
 $(obj)/vmlinux.bin: vmlinux FORCE
 	$(call if_changed,objcopy)
 
@@ -128,6 +132,7 @@ quiet_cmd_relocs = RELOCS  $@
 $(obj)/vmlinux.relocs: vmlinux.unstripped FORCE
 	$(call if_changed,relocs)
 
+# NOTE:
 vmlinux.bin.all-y := $(obj)/vmlinux.bin
 vmlinux.bin.all-$(CONFIG_X86_NEED_RELOCS) += $(obj)/vmlinux.relocs
 
@@ -157,6 +162,8 @@ suffix-$(CONFIG_KERNEL_ZSTD)	:= zst
 quiet_cmd_mkpiggy = MKPIGGY $@
       cmd_mkpiggy = $(obj)/mkpiggy $< > $@
 
+# NOTE: 定义依赖规则
 targets += piggy.S
+# piggy.S用于直接保存被压缩后的`$(obj)/vmlinux.bin.$(suffix-y)`的内容
 $(obj)/piggy.S: $(obj)/vmlinux.bin.$(suffix-y) $(obj)/mkpiggy FORCE
 	$(call if_changed,mkpiggy)

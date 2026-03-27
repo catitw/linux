@@ -3,8 +3,9 @@
 # Building
 # ==========================================================================
 
-src := $(srcroot)/$(obj)
+src := $(srcroot)/$(obj) # NOTE: obj=.
 
+# NOTE: 第一个目标，即默认目标为`$(obj)`, 也就是`.`
 PHONY := $(obj)/
 $(obj)/:
 
@@ -34,6 +35,13 @@ subdir-ccflags-y :=
 
 include $(srctree)/scripts/Kbuild.include
 include $(srctree)/scripts/Makefile.compiler
+# NOTE: `kbuild-file`定义在`Kbuild.include`文件中，内容为：
+# kbuild-file = $(or $(wildcard $(src)/Kbuild),$(src)/Makefile)
+# 即优先选名为Kbuild的文件，其次选名为Makefile的文件
+#
+# include这个文件最重要的是指定递归构建的骨架
+#
+# 当构建`bzImage`时，`kbuild-file`为`$(src)/arch/x86/boot/Makefile`
 include $(kbuild-file)
 include $(srctree)/scripts/Makefile.lib
 
@@ -54,6 +62,7 @@ obj-m := $(filter-out $(obj-y),$(obj-m))
 lib-y := $(filter-out $(obj-y), $(sort $(lib-y) $(lib-m)))
 
 # Subdirectories we need to descend into
+# NOTE: 过滤出需要递归构建的子目录并拼接
 subdir-ym := $(sort $(subdir-y) $(subdir-m) \
 			$(patsubst %/,%, $(filter %/, $(obj-y) $(obj-m))))
 
@@ -65,13 +74,23 @@ subdir-ym := $(sort $(subdir-y) $(subdir-m) \
 # Generate modules.order to determine modorder. Unfortunately, we don't have
 # information about ordering between -y and -m subdirs. Just put -y's first.
 
+# NOTE: need-modorder此处设置为1
 ifdef need-modorder
+# 最终：obj-m的组成：
+# - obj-m中，以`/`结束的目标，其被替换为了`%/foo/modules.order`
+# - obj-m中没有以`/`结束的目标，仍被保留(没有被 patsubst 函数匹配的内容会被保留)
+# - obj-y中，以`/`结束的目标，其被替换为了`%/foo/modules.order`
 obj-m := $(patsubst %/,%/modules.order, $(filter %/, $(obj-y)) $(obj-m))
 else
 obj-m := $(filter-out %/, $(obj-m))
 endif
 
+# NOTE: need-builtin此处设置为1
 ifdef need-builtin
+# NOTE: KEY POINT
+# 最终，obj-y的组成：
+# - 没有匹配`%/`的部分被保留
+# - 匹配`%/`的目标，被替换为`%/built-in.a`
 obj-y		:= $(patsubst %/, %/built-in.a, $(obj-y))
 else
 obj-y		:= $(filter-out %/, $(obj-y))
@@ -135,7 +154,20 @@ endif
 # ===========================================================================
 
 # subdir-builtin and subdir-modorder may contain duplications. Use $(sort ...)
+# NOTE: 过滤后subdir-builtin的值类似于：
+# - init/built-in.a
+# - usr/built-in.a
+# - arch/x86/built-in.a
+# - ...
 subdir-builtin := $(sort $(filter %/built-in.a, $(real-obj-y)))
+# NOTE: 过滤后subdir-modorder的值类似于：
+# - 来自于原先的obj-m:
+#   - io_uring/modules.order (`obj-$(CONFIG_IO_URING)	+= io_uring/`, 当CONFIG_IO_URING=m)
+# - 来自于obj-y:
+#   - init/modules.order
+#   - usr/modules.order
+#   - arch/x86/modules.order
+#   - ...
 subdir-modorder := $(sort $(filter %/modules.order, $(obj-m)))
 
 targets-for-builtin := $(extra-y)
@@ -144,7 +176,9 @@ ifneq ($(strip $(lib-y) $(lib-m) $(lib-)),)
 targets-for-builtin += $(obj)/lib.a
 endif
 
+# NOTE: need-builtin此处设置为1
 ifdef need-builtin
+# KEY POINT
 targets-for-builtin += $(obj)/built-in.a
 endif
 
@@ -455,6 +489,14 @@ $(obj)/%.asn1.c $(obj)/%.asn1.h: $(src)/%.asn1 $(objtree)/scripts/asn1_compiler
 # ---------------------------------------------------------------------------
 
 # To build objects in subdirs, we need to descend into the directories
+# NOTE: KEY POINT
+# 语法说明： 先用`$(obj)/%/built-in.a`这个匹配在`$(subdir-builtin)`中找到`%`, 然后定义规则：`$(obj)/%/built-in.a: $(obj)/% `
+#
+# 等价于：
+# $(obj)/init/built-in.a: $(obj)/init
+# $(obj)/usr/built-in.a: $(obj)/usr
+# $(obj)/arch/x86/built-in.a: $(obj)/arch/x86
+# ...
 $(subdir-builtin): $(obj)/%/built-in.a: $(obj)/% ;
 $(subdir-modorder): $(obj)/%/modules.order: $(obj)/% ;
 
@@ -469,6 +511,13 @@ quiet_cmd_ar_builtin = AR      $@
 	$(if $(real-prereqs), printf "$(obj)/%s " $(patsubst $(obj)/%,%,$(real-prereqs)) | xargs) \
 	$(AR) cDPrST $@
 
+# NOTE: KEY POINT
+# 构建当前目录的`built-in.a`
+#
+# `real-obj-y`包含：
+#   - 当前目录的各种的`.o`文件
+#   - 被依赖的子目录的`built-in.a`文件
+# > 可以查看`$(obj)/kernel/.built-in.a.cmd`文件的内容作为示例
 $(obj)/built-in.a: $(real-obj-y) FORCE
 	$(call if_changed,ar_builtin)
 
@@ -534,6 +583,25 @@ endif
 # Build
 # ---------------------------------------------------------------------------
 
+# NOTE: `$(obj)/`核心构建规则
+# 让默认的构建目标`$(obj)/`去依赖:
+# - 当前目录所属的`$(obj)/built-in.a`, 其又依赖于:
+#    - 当前目录的各种的`.o`文件
+#    - 被依赖的子目录的`built-in.a`文件
+#      > 关于如何构建子目录的`built-in.a`文件:
+#      > - `subdir-builtin := $(sort $(filter %/built-in.a, $(real-obj-y)))`
+#      >
+#      > - `$(subdir-builtin)`的构建规则，又指定了它需要依赖子目录.
+#      >   ```makefile
+#      >   $(subdir-builtin): $(obj)/%/built-in.a: $(obj)/% ;
+#      >   ```
+#
+# - 子目录，即`$(subdir-ym)`. 由此触发`$(subdir-ym)`的构建规则
+#
+# NOTE:
+# - `KBUILD_BUILTIN` 默认设置为 `y`
+# - `targets-for-builtin` 中包括 `$(obj)/built-in.a`
+# - `subdir-ym` 即为 `subdir-y`, `subdir-m`, `obj-y`中以`/`结尾的部分, `obj-m`中以`/`结尾的部分组成
 $(obj)/: $(if $(KBUILD_BUILTIN), $(targets-for-builtin)) \
 	 $(if $(KBUILD_MODULES), $(targets-for-modules)) \
 	 $(subdir-ym) $(always-y)
@@ -551,8 +619,12 @@ $(single-subdir-goals): $(single-subdirs)
 # Descending
 # ---------------------------------------------------------------------------
 
+# NOTE: KEY POINT
+# 到子目录进行递归构建
 PHONY += $(subdir-ym)
 $(subdir-ym):
+	@# 例如对于`init/`目录, 这里的命令展开为:
+	@# make -f $(srctree)/scripts/Makefile.build obj=init need-builtin=1 need-modorder=1 
 	$(Q)$(MAKE) $(build)=$@ \
 	need-builtin=$(if $(filter $@/built-in.a, $(subdir-builtin)),1) \
 	need-modorder=$(if $(filter $@/modules.order, $(subdir-modorder)),1) \

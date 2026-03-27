@@ -294,6 +294,7 @@ quiet_cmd_touch = TOUCH   $(call normalize_path,$@)
 # Linking
 # ---------------------------------------------------------------------------
 
+# NOTE: cmd_ld的规则定义
 quiet_cmd_ld = LD      $@
       cmd_ld = $(LD) $(ld_flags) $(real-prereqs) -o $@
 
@@ -306,6 +307,7 @@ quiet_cmd_ar = AR      $@
 # Objcopy
 # ---------------------------------------------------------------------------
 
+# NOTE: cmd_objcopy的规则定义
 quiet_cmd_objcopy = OBJCOPY $@
 cmd_objcopy = $(OBJCOPY) $(OBJCOPYFLAGS) $(OBJCOPYFLAGS_$(@F)) $< $@
 

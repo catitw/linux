@@ -87,6 +87,7 @@ prepare: $(offsets-file) missing-syscalls $(atomic-checks)
 # Ordinary directory descending
 # ---------------------------------------------------------------------------
 
+# NOTE: 指定递归构建的骨架
 obj-y			+= init/
 obj-y			+= usr/
 obj-y			+= arch/$(SRCARCH)/
